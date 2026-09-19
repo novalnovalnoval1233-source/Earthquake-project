@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthquake Tracker Indonesia - BMKG</title>
+    
+    <!-- Leaflet CSS untuk Peta -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            padding: 15px;
+            display: flex;
+            justify-content: center;
+        }
+
+        .main-container {
+            max-width: 600px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        header {
+            text-align: center;
+            padding: 10px 0;
+        }
+
+        header h1 {
+            font-size: 1.5rem;
+            color: #ef4444;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        header p {
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+
+        /* Peta Leaflet */
+        #map {
+            height: 250px;
+            width: 100%;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 1;
+        }
+
+        /* Detail Gempa Card */
+        .card {
+            background-color: #1e293b;
+            border-radius: 12px;
+            padding: 15px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            border: 1px solid #334155;
+        }
+
+        .badge-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .badge-magnitude {
+            background-color: #ef4444;
+            color: white;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+
+        .badge-time {
+            font-size: 0.8rem;
+            color: #cbd5e1;
+            background: #334155;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .info-item {
+            background-color: #0f172a;
+            padding: 8px 10px;
+            border-radius: 8px;
+        }
+
+        .info-item span {
+            display: block;
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        .info-item strong {
+            font-size: 0.9rem;
+            color: #f1f5f9;
+        }
+
+        .full-width {
+            grid-column: span 2;
+        }
+
+        /* Gambar Peta BMKG */
+        .bmkg-map-container {
+            text-align: center;
+            margin-top: 10px;
+        }
+
+        .bmkg-map-container img {
+            width: 100%;
+            border-radius: 8px;
+            border: 1px solid #334155;
+        }
+
+        button {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.95rem;
+            cursor: pointer;
+            width: 100%;
+            box-shadow: 0 4px 6px rgba(239, 68, 68, 0.2);
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="main-container">
+        <header>
+            <h1>🚨 Info Gempa Terkini</h1>
+            <p>Data Realtime dari BMKG Indonesia</p>
+        </header>
+
+        <!-- Peta Interaktif -->
+        <div id="map"></div>
+
+        <!-- Kartu Detail Informasi -->
+        <div class="card" id="gempa-card">
+            <p style="text-align: center; color: #94a3b8;">Mengambil data dari BMKG...</p>
+        </div>
+
+        <button onclick="loadGempaData()">🔄 Refresh Data Gempa</button>
+    </div>
+
+    <!-- Leaflet JS untuk Peta -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        let map = L.map('map').setView([-2.548926, 118.014863], 4); // Koordinat Indonesia
+        let marker;
+
+        // Pasang Map Style (OpenStreetMap Dark)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap'
+        }).addTo(map);
+
+        async function loadGempaData() {
+            const cardContainer = document.getElementById('gempa-card');
+            
+            try {
+                const response = await fetch('https://data.bmkg.go.id/DataMKG/TEWS/autogempa.json');
+                const data = await response.json();
+                const gempa = data.Infogempa.gempa;
+
+                // Ambil koordinat
+                const coords = gempa.Coordinates.split(',');
+                const lat = parseFloat(coords[0]);
+                const lng = parseFloat(coords[1]);
+
+                // Update Peta
+                map.setView([lat, lng], 6);
+                if (marker) map.removeLayer(marker);
+                
+                marker = L.marker([lat, lng]).addTo(map)
+                    .bindPopup(`<b>${gempa.Wilayah}</b><br>M ${gempa.Magnitude} - ${gempa.Jam}`)
+                    .openPopup();
+
+                // Update HTML Kartu
+                cardContainer.innerHTML = `
+                    <div class="badge-container">
+                        <span class="badge-magnitude">M ${gempa.Magnitude}</span>
+                        <span class="badge-time">🕒 ${gempa.Tanggal} - ${gempa.Jam}</span>
+                    </div>
+
+                    <div class="info-grid">
+                        <div class="info-item full-width">
+                            <span>Lokasi Wilayah</span>
+                            <strong>${gempa.Wilayah}</strong>
+                        </div>
+                        <div class="info-item">
+                            <span>Kedalaman</span>
+                            <strong>${gempa.Kedalaman}</strong>
+                        </div>
+                        <div class="info-item">
+                            <span>Koordinat</span>
+                            <strong>${gempa.Coordinates}</strong>
+                        </div>
+                        <div class="info-item full-width">
+                            <span>Potensi</span>
+                            <strong style="color: #f59e0b;">${gempa.Potensi}</strong>
+                        </div>
+                        <div class="info-item full-width">
+                            <span>Dirasakan (MMI)</span>
+                            <strong>${gempa.Dirasakan || 'Tidak ada data'}</strong>
+                        </div>
+                    </div>
+
+                    <div class="bmkg-map-container">
+                        <p style="font-size: 0.8rem; color: #94a3b8; margin-bottom: 5px;">Peta Guncangan BMKG:</p>
+                        <img src="https://data.bmkg.go.id/DataMKG/TEWS/${gempa.Shakemap}" alt="Peta Shakemap BMKG">
+                    </div>
+                `;
+
+            } catch (error) {
+                cardContainer.innerHTML = `<p style="color: #ef4444; text-align: center;">Gagal memuat data gempa. Pastikan koneksi internet aman!</p>`;
+            }
+        }
+
+        // Jalankan saat pertama dibuka
+        loadGempaData();
+    </script>
+</body>
+  </html>
+  
