@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoWatch - Global Geological Monitoring</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: #0f0f12;
+      color: #ffffff;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Navbar Style */
+    .navbar {
+      height: 55px;
+      background-color: #16161a;
+      border-bottom: 1px solid #282830;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 15px;
+      z-index: 1000;
+    }
+
+    .logo-area {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo-area h1 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .logo-area h1 span {
+      color: #00e676;
+      font-size: 0.75rem;
+      background: rgba(0, 230, 118, 0.15);
+      padding: 2px 6px;
+      border-radius: 4px;
+      text-transform: uppercase;
+    }
+
+    /* Indicator Pulse */
+    .pulse-icon {
+      width: 10px;
+      height: 10px;
+      background-color: #00e676;
+      border-radius: 50%;
+      box-shadow: 0 0 0 rgba(0, 230, 118, 0.4);
+      animation: pulse 1.8s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(0, 230, 118, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(0, 230, 118, 0); }
+    }
+
+    .stats-badge {
+      font-size: 0.75rem;
+      color: #a0a0b0;
+      background: #212129;
+      padding: 5px 10px;
+      border-radius: 20px;
+      border: 1px solid #323240;
+    }
+
+    /* Map Style */
+    #map-container {
+      flex: 1;
+      width: 100%;
+      position: relative;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background-color: #0f0f12;
+    }
+
+    /* Legend Style */
+    .legend-card {
+      position: absolute;
+      bottom: 20px;
+      left: 10px;
+      right: 10px;
+      background: rgba(22, 22, 26, 0.9);
+      backdrop-filter: blur(8px);
+      border: 1px solid #282830;
+      padding: 10px 12px;
+      border-radius: 10px;
+      z-index: 999;
+    }
+
+    .legend-title {
+      font-size: 0.7rem;
+      color: #888899;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    .legend-items {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.7rem;
+      color: #d0d0e0;
+    }
+
+    .legend-items span {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .legend-items i {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    /* Leaflet Popup Custom Style */
+    .leaflet-popup-content-wrapper {
+      background: #1e1e24 !important;
+      color: #ffffff !important;
+      border-radius: 8px !important;
+      border: 1px solid #333340;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5) !important;
+    }
+
+    .leaflet-popup-tip {
+      background: #1e1e24 !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header / Navbar -->
+  <header class="navbar">
+    <div class="logo-area">
+      <span class="pulse-icon"></span>
+      <h1>GeoWatch <span>Live</span></h1>
+    </div>
+    <div class="stats-badge" id="earthquake-count">
+      Loading data...
+    </div>
+  </header>
+
+  <!-- Main Map Container -->
+  <main id="map-container">
+    <div id="map"></div>
+  </main>
+
+  <!-- Legend -->
+  <div class="legend-card">
+    <p class="legend-title">Earthquake Magnitude</p>
+    <div class="legend-items">
+      <span><i style="background: #00e676;"></i> &lt; 3.0</span>
+      <span><i style="background: #ffea00;"></i> 3.0 - 4.9</span>
+      <span><i style="background: #ff9100;"></i> 5.0 - 5.9</span>
+      <span><i style="background: #ff1744;"></i> &ge; 6.0</span>
+      <span><i style="background: #d500f9; border-radius: 2px;"></i> 🌋 Volcano</span>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // 1. World Map Bounds
+    const southWest = L.latLng(-85, -180);
+    const northEast = L.latLng(85, 180);
+    const worldBounds = L.latLngBounds(southWest, northEast);
+
+    // 2. Initialize Map
+    const map = L.map('map', {
+      zoomControl: false,
+      maxBounds: worldBounds,
+      maxBoundsViscosity: 1.0,
+      worldCopyJump: false,
+      minZoom: 2.5,
+      maxZoom: 18
+    }).setView([20, 0], 2.5);
+
+    // Zoom Control
+    if (L.control.zoom) {
+      L.control.zoom({ position: 'topright' }).addTo(map);
+    }
+
+    // 3. Tile Layer (Esri Dark Gray Canvas)
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', {
+      attribution: '&copy; Esri, HERE, Garmin, USGS',
+      noWrap: true,
+      bounds: worldBounds,
+      maxZoom: 16
+    }).addTo(map);
+
+    // 4. Color Helper based on Magnitude
+    function getEqColor(mag) {
+      if (mag >= 6.0) return '#ff1744';
+      if (mag >= 5.0) return '#ff9100';
+      if (mag >= 3.0) return '#ffea00';
+      return '#00e676';
+    }
+
+    // 5. Load Real-Time Earthquakes from USGS Feed
+    const usgsUrl = 'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
+
+    fetch(usgsUrl)
+      .then(res => res.json())
+      .then(data => {
+        const earthquakes = data.features;
+        
+        const countElement = document.getElementById('earthquake-count');
+        if (countElement) {
+          countElement.innerHTML = `24h Total: <b>${earthquakes.length}</b> quakes`;
+        }
+
+        earthquakes.forEach(eq => {
+          const [lng, lat, depth] = eq.geometry.coordinates;
+          const { mag, place, time, url } = eq.properties;
+
+          const marker = L.circleMarker([lat, lng], {
+            radius: Math.max(mag * 2.2, 3.5),
+            fillColor: getEqColor(mag),
+            color: '#000000',
+            weight: 0.5,
+            opacity: 1,
+            fillOpacity: 0.8
+          }).addTo(map);
+
+          const dateStr = new Date(time).toLocaleString('en-US', {
+            dateStyle: 'medium',
+            timeStyle: 'short',
+            timeZone: 'UTC'
+          }) + ' UTC';
+
+          marker.bindPopup(`
+            <div style="font-size: 13px; padding: 2px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <strong style="color: ${getEqColor(mag)}; font-size: 16px;">M ${mag}</strong>
+                <span style="font-size: 10px; color: #888;">Depth: ${depth} km</span>
+              </div>
+              <p style="margin-bottom: 6px; font-weight: 500;">${place}</p>
+              <p style="font-size: 11px; color: #aaa; margin-bottom: 8px;">🕒 ${dateStr}</p>
+              <a href="${url}" target="_blank" style="color: #40c4ff; text-decoration: none; font-size: 11px;">
+                Official USGS Report &rarr;
+              </a>
+            </div>
+          `);
+        });
+      })
+      .catch(err => {
+        console.error("Failed to load USGS data:", err);
+      });
+
+    // 6. Load Active Volcanoes
+    const volcanoUrl = 'https://raw.githubusercontent.com/cambridge-tec/volcano-data/main/volcanoes.json';
+
+    fetch(volcanoUrl)
+      .then(res => res.json())
+      .then(volcanoes => {
+        volcanoes.forEach(v => {
+          const volcanoIcon = L.divIcon({
+            className: 'custom-volcano-icon',
+            html: `<div style="background-color: #d500f9; width: 8px; height: 8px; border-radius: 2px; border: 1px solid #fff;"></div>`,
+            iconSize: [8, 8]
+          });
+
+          const vMarker = L.marker([v.lat, v.lon], { icon: volcanoIcon }).addTo(map);
+
+          vMarker.bindPopup(`
+            <div style="font-size: 12px;">
+              <strong style="color: #d500f9; font-size: 14px;">🌋 ${v.name}</strong><br>
+              <span style="color: #ccc;">Country: ${v.country}</span><br>
+              <span style="color: #aaa; font-size: 11px;">Type: ${v.type || 'Volcano'}</span>
+            </div>
+          `);
+        });
+      })
+      .catch(err => {
+        console.log("Volcano feed skipped:", err);
+      });
+  </script>
+</body>
+  </html>
+  
